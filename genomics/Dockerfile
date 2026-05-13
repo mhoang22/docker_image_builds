@@ -78,7 +78,9 @@ RUN pip install --no-cache-dir \
     # Utilities
     tqdm==4.66.4 \
     rich==13.7.1 \
-    click==8.1.7
+    click==8.1.7 \
+    # String matching
+    pyahocorasick==2.1.0
 
 # ---------------------------------------------------------------------------
 # 3. Copy analysis scripts into image
