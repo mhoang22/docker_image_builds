@@ -3,5 +3,6 @@ __pycache__/
 *.pyc
 # macOS metadata files
 ._*
+**/._*
 .DS_Store
-._*
+
