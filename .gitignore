@@ -1,0 +1,6 @@
+*.log
+__pycache__/
+*.pyc
+# macOS metadata files
+._*
+.DS_Store
