@@ -23,26 +23,24 @@ ENV TZ=UTC
 # 1. System dependencies
 # ---------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        # Core tools
         wget \
         curl \
         git \
         unzip \
         bzip2 \
         ca-certificates \
-        # Build tools (needed by some Python packages)
         build-essential \
         gcc \
         g++ \
         make \
-        # NCBI BLAST+
         ncbi-blast+ \
-        # Python
         python3.11 \
         python3.11-dev \
         python3-pip \
         python3.11-venv \
-        # Misc utilities
+        libxml2-dev \
+        libxslt1-dev \
+        libhdf5-dev \
         less \
         vim \
         parallel \
@@ -58,49 +56,79 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
 # 2. Python packages
 # ---------------------------------------------------------------------------
 RUN pip install --no-cache-dir \
-    # Core data science
     numpy==1.26.4 \
     pandas==2.2.2 \
     scipy==1.13.1 \
-    # Bioinformatics
     biopython==1.83 \
-    pyteomics==4.7.3 \
-    # File I/O
+    "pyteomics[xml,unimod]==4.7.3" \
+    lxml==5.2.2 \
+    sqlalchemy==2.0.30 \
+    pynumpress==0.0.8 \
     openpyxl==3.1.2 \
     xlrd==2.0.1 \
-    # Visualization
     matplotlib==3.9.0 \
     seaborn==0.13.2 \
     plotly==5.22.0 \
-    # Interactive analysis
+    kaleido==0.2.1 \
     jupyterlab==4.2.1 \
     ipywidgets==8.1.3 \
-    # Utilities
     tqdm==4.66.4 \
     rich==13.7.1 \
     click==8.1.7 \
-    # String matching
-    pyahocorasick==2.1.0
+    requests==2.32.3 \
+    pyahocorasick==2.1.0 \
+    scikit-learn==1.5.0 \
+    statsmodels==0.14.2
 
 # ---------------------------------------------------------------------------
 # 3. Copy analysis scripts into image
+#
+#   scripts/
+#   |-- blast_peptides.sh
+#   |     Shell wrapper that runs the full BLAST pipeline end-to-end:
+#   |     list_to_fasta -> makeblastdb -> blastp -> parse_blast_results.
+#   |     Usage: bash blast_peptides.sh <peptide_list.txt> <ref_fasta> <out_dir>
+#   |
+#   |-- exact_li_match.py
+#   |     L/I-aware exact string matching: treats Leucine and Isoleucine as
+#   |     equivalent (indistinguishable by mass) when comparing peptide lists.
+#   |     Usage: python exact_li_match.py <query_list.txt> <ref_list.txt>
+#   |
+#   |-- kmer_pile_assign.py
+#   |     Assigns k-mer "piles" (groups of overlapping k-mers) to peptide
+#   |     sequences; used for coverage and redundancy analysis.
+#   |     Usage: python kmer_pile_assign.py <peptides.txt> --k <int>
+#   |
+#   |-- kmer_ref_annotate.py
+#   |     Annotates peptides against a k-mer reference database, reporting
+#   |     which reference proteins share k-mers with each query peptide.
+#   |     Usage: python kmer_ref_annotate.py <peptides.txt> <ref_fasta>
+#   |
+#   |-- list_to_fasta.py
+#   |     Converts a plain text peptide list (one sequence per line) into a
+#   |     FASTA file suitable for BLAST or other sequence tools.
+#   |     Usage: python list_to_fasta.py <peptide_list.txt> <output.fasta>
+#   |
+#   |-- parse_blast_results.py
+#   |     Parses BLAST tabular output (fmt 6), filters by e-value / identity,
+#   |     and writes a tidy TSV summary with hit annotations.
+#   |     Usage: python parse_blast_results.py <blast_out.txt> <output.tsv>
+#   |
+#   +-- plot_instanovo_match_vs_nomatch.py
+#         Joins InstaNovo+ predictions against a peptide reference file
+#         (columns: peptide, n_proteins, protein_ids), classifies each
+#         prediction as MATCH (n_proteins > 0) or NO_MATCH, then produces
+#         side-by-side box plots of log probability and delta_mass_ppm.
+#         Usage: python plot_instanovo_match_vs_nomatch.py \
+#                    --instanovo <instanovo.csv> \
+#                    --reference <ref.csv> \
+#                    --out       <plot.png>
 # ---------------------------------------------------------------------------
 WORKDIR /opt/genomics
 
-# --- Script 1: exact L/I-aware matching ------------------------------------
-COPY scripts/exact_li_match.py       /opt/genomics/exact_li_match.py
-
-# --- Script 2: BLAST result parser -----------------------------------------
-COPY scripts/parse_blast_results.py  /opt/genomics/parse_blast_results.py
-
-# --- Script 3: FASTA helper (peptide list → FASTA) -------------------------
-COPY scripts/list_to_fasta.py        /opt/genomics/list_to_fasta.py
-
-# --- Shell wrapper for full BLAST pipeline ---------------------------------
-COPY scripts/blast_peptides.sh       /opt/genomics/blast_peptides.sh
+COPY scripts/ /opt/genomics/
 RUN chmod +x /opt/genomics/blast_peptides.sh
 
-# Add scripts to PATH
 ENV PATH="/opt/genomics:${PATH}"
 
 # ---------------------------------------------------------------------------
@@ -117,7 +145,7 @@ WORKDIR /data
 # ---------------------------------------------------------------------------
 # 5. Verify installations
 # ---------------------------------------------------------------------------
-RUN python -c "import Bio; import pandas; import numpy; print('Python packages OK')" \
+RUN python -c "import Bio; import pandas; import numpy; import scipy; import pyteomics; import lxml; import sqlalchemy; import matplotlib; import sklearn; import ahocorasick; print('All Python packages OK')" \
  && blastp -version \
  && makeblastdb -version
 
